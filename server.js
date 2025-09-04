@@ -5,24 +5,37 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ODDS_API_KEY = process.env.ODDS_API_KEY;
 
 app.use(cors());
 
 app.get('/nfl-odds', async (req, res) => {
   try {
-    const response = await axios.get('https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds', {
-      params: {
-        apiKey: ODDS_API_KEY,
-        regions: 'us',
-        markets: 'h2h,spreads,totals',
-        oddsFormat: 'american',
-      },
-    });
+    const { books, book, regions = 'us', markets = 'h2h,spreads,totals', oddsFormat = 'american' } = req.query;
 
+    // Normalize bookmaker list
+    const bookmakerList = (books || book || 'draftkings,fanduel,betmgm,caesars,bet365')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean)
+      .join(',');
+
+    const response = await axios.get(
+      'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds',
+      {
+        params: {
+          apiKey: process.env.ODDS_API_KEY,
+          regions,
+          markets,
+          oddsFormat,
+          bookmakers: bookmakerList
+        }
+      }
+    );
+
+    res.set('Cache-Control', 'public, max-age=60');
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching NFL odds:', error.message);
+    console.error('Error fetching NFL odds:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to fetch NFL odds.' });
   }
 });
